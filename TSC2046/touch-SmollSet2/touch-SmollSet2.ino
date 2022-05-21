@@ -1,8 +1,5 @@
 // ILI9341 SPI Graphics TEST
 #include <SPI.h>
-#include "image2.h"
-#include "font8x16.h"
-
 #define TFT_CLK 13
 #define TFT_MISO 12
 #define TFT_MOSI 11
@@ -13,38 +10,29 @@
 
 #define CMD_RDX 0XD0
 #define CMD_RDY 0X90
-#define CMD_RDZ1 0XB4
-#define CMD_RDZ2 0XC4
+#define CMD_RDZ1 0XB0
+#define CMD_RDZ2 0XC0
 
 // ▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼
-boolean readPos(int &x,int &y,int &z) {
+boolean readPos(int &x,int &y) {
   boolean touch = false;
-  uint16_t rx,ry;
-  uint8_t z1,z2,rz ;
+  uint8_t z1,z2 ;
 
-  digitalWrite(TS_CS, LOW);
+  digitalWrite(TFT_CS, LOW);
 
   SPI.transfer(CMD_RDX);
-  rx = SPI.transfer16(0);
-  rx >>= 4 ;
-
+  x = SPI.transfer16(0);
+  x >>= 3 ;
   SPI.transfer(CMD_RDY);
-  ry = SPI.transfer16(0);
-  ry >>= 4 ;
-
+  y = SPI.transfer16(0);
+  y >>= 3 ;
   SPI.transfer(CMD_RDZ1);
   z1 = SPI.transfer(0);
-
   SPI.transfer(CMD_RDZ2);
   z2 = SPI.transfer(0);
-
-  digitalWrite(TS_CS, HIGH);
+  digitalWrite(TFT_CS, HIGH);
 
   if (z1 > 0 && z2 > 0) {
-    rz = 4096 - (int)((double)(z2 / z1 * rx / 4.0 ));
-    x = rx ;
-    y = ry ;
-    z = rz ;
     touch = true ;
   }
   
@@ -52,7 +40,7 @@ boolean readPos(int &x,int &y,int &z) {
 }
 
 // ▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼
-// SPISettings settings = SPISettings(2000000, MSBFIRST, SPI_MODE0);  // 2MHzで合ってるよね？変だと思ったら修正してください。
+// SPISettings settings = SPISettings(4000000, MSBFIRST, SPI_MODE0);  // 4MHz
 void setup() {
   Serial.begin(9600);
   Serial.println(F("TOUCH PANEL(TSC2046) TEST"));
@@ -144,17 +132,16 @@ void loop() {
     digitalWrite(TFT_CS, HIGH); //TFT解放
 
     char str[16] ;
-    int x,y,z ;
+    int x,y ;
     for (int i=0;i<5;i++) {
-      if (readPos(x,y,z)) {
-        sprintf(str,"H%04d\r\n%04d",x,y) ;
-        Serial.println(str);
-//        Serial.print(x);
-//        Serial.print(" , ");
-//        Serial.print(y);
-//        Serial.print(" ) Press( ");
-//        Serial.print(z);
-//        Serial.println(" )");
+      if (readPos(x,y)) {
+//        sprintf(str,"H%04d\r\n%04d",x,y) ;
+//        Serial.println(str);
+        Serial.print("( ");
+        Serial.print(x);
+        Serial.print(" , ");
+        Serial.print(y);
+        Serial.println(" )");
       }
       delay(100) ;
     }

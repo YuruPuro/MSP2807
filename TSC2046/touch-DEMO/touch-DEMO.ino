@@ -1,6 +1,5 @@
-// ILI9341 SPI Graphics TEST
+// TSC2046 Touch Screen & ILI9341 SPI Graphics TEST
 #include <SPI.h>
-#include "font8x16.h"
 
 #define TFT_CLK 13
 #define TFT_MISO 12
@@ -12,12 +11,8 @@
 
 #define CMD_RDX 0XD0
 #define CMD_RDY 0X90
-#define CMD_RDZ1 0XB4
-#define CMD_RDZ2 0XC4
-
-uint8_t SPIBuf[320*2] ;   // SPI転送用バッファ
-uint16_t fontColorF[2] ;   // TEXT FOR GROND COLOR
-uint16_t fontColorB[2] ;   // TEXT BACK GROND COLOR
+#define CMD_RDZ1 0XB0
+#define CMD_RDZ2 0XC0
 
 int cxs,cxe,cys,cye,ox,oy ;
 int pbx,pby ;
@@ -25,8 +20,8 @@ uint16_t tftWidth ;
 uint16_t tftHeight ;
 uint16_t tftDir ;
 
-# define ILI9341_WIDTH 320
-# define ILI9341_HEIGHT 240
+#define ILI9341_WIDTH 320
+#define ILI9341_HEIGHT 240
 
 #define HBYTE(u) ((u >> 8) & 0xFF)
 #define LBYTE(u) (u & 0xFF)
@@ -111,106 +106,31 @@ void fillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t hight, uint16_t c
   digitalWrite(TFT_CS, HIGH); //通信終了
 }
 
-// △▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽
-void dispStr(char str[] , uint8_t x , uint8_t y) {
-  for (int i=0;str[i] != 0 ; i++) {
-      dispFont(str[i],x,y) ;
-      x += 8 ;
-      if (x+8>=tftWidth) {
-        x = 0 ;
-        y += 16 ;
-        if (y + 16 >= tftHeight) {
-          y = 0 ; 
-        }
-      }
-  }
-}
-
-// △▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽△▽
-void dispFont(uint8_t code , uint8_t x, uint8_t y) {
-  int pos = (code - 0x20) * 16 ;
-  memset(SPIBuf,0,8*16*2) ;
-  for (int i=0;i<16;i++) {
-    uint8_t data = pgm_read_byte(ssd1306xled_font8x16 + pos + i);
-    uint8_t bitMast = 0x01 ; 
-    for (int j=0;j<8;j++) {
-      int fpos = 0 ;
-      if (i<8) {
-        fpos = (j*8+i)*2 ;
-      } else {
-        fpos = ((j+8)*8+(i-8))*2 ;
-      }
-      if ((data & bitMast) == 0) {
-        SPIBuf[fpos] = fontColorB[0] ;
-        SPIBuf[fpos+1] = fontColorB[1] ;
-      } else {
-        SPIBuf[fpos] = fontColorF[0] ;
-        SPIBuf[fpos+1] = fontColorF[1] ;
-      }
-      bitMast <<= 1 ;
-    }
-  }
-
-  uint8_t endX = x + 7 ;
-  uint8_t endY = y + 15;
-
-  digitalWrite(TFT_CS, LOW);  //通信開始
-
-  digitalWrite(TFT_DC, LOW); // Command mode
-  SPI.transfer(0x2a);
-  digitalWrite(TFT_DC, HIGH); // data mode
-  SPI.transfer16(x);
-  SPI.transfer16(endX);
-
-  digitalWrite(TFT_DC, LOW); // Command mode
-  SPI.transfer(0x2b);
-  digitalWrite(TFT_DC, HIGH); // data mode
-  SPI.transfer16(y);
-  SPI.transfer16(endY);
-
-  digitalWrite(TFT_DC, LOW); // Command mode
-  SPI.transfer(0x2c);
-  digitalWrite(TFT_DC, HIGH); // data mode
-  SPI.transfer(SPIBuf, 8*16*2);
-  digitalWrite(TFT_DC, LOW); // Command mode
-  digitalWrite(TFT_CS, HIGH); //通信終了
-}
-
 // ▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼
-boolean readPos(int &x,int &y,int &z) {
+boolean readPos(int &x,int &y) {
   boolean touch = false;
-  uint16_t rx,ry;
-  uint8_t z1,z2,rz ;
+  uint8_t z1,z2 ;
 
-  digitalWrite(TS_CS, LOW);
+  digitalWrite(TFT_CS, LOW);
 
   SPI.transfer(CMD_RDX);
-  rx = SPI.transfer16(0);
-  rx >>= 4 ;
-
+  x = SPI.transfer16(0);
+  x >>= 3 ;
   SPI.transfer(CMD_RDY);
-  ry = SPI.transfer16(0);
-  ry >>= 4 ;
-
+  y = SPI.transfer16(0);
+  y >>= 3 ;
   SPI.transfer(CMD_RDZ1);
   z1 = SPI.transfer(0);
-
   SPI.transfer(CMD_RDZ2);
   z2 = SPI.transfer(0);
-
-  digitalWrite(TS_CS, HIGH);
+  digitalWrite(TFT_CS, HIGH);
 
   if (z1 > 0 && z2 > 0) {
-    rz = 4096 - (int)((double)(z2 / z1 * rx / 4.0 ));
-    x = rx ;
-    y = ry ;
-    z = rz ;
     touch = true ;
   }
   
   return touch ;
 }
-
 // ▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼
 //calibration
 void calibration( ) {
@@ -218,10 +138,10 @@ void calibration( ) {
   fillRect(0,0,tftWidth-1,tftHeight-1,0x0000) ;
   fillRect(0,9,20,1,0xFFFF) ; fillRect(9,0,1,20,0xFFFF) ;
   int stat = 0 ;
-  int x,y,z ;
+  int x,y ;
   char str[24] ;
   while (stat != 2) {
-    if ( readPos(x,y,z) ) {
+    if ( readPos(x,y) ) {
       switch(stat) {
         case 0:
           cxs = x ; cys = y ; stat = 1 ;
@@ -229,12 +149,12 @@ void calibration( ) {
           fillRect(tftWidth-20,tftHeight-10,20,1,0xFFFF) ;
           fillRect(tftWidth-10,tftHeight-20,1,20,0xFFFF) ;
           sprintf(str,"CXS=%4d  CYS=%4d",cxs,cys) ;
-          dispStr(str,50,50) ;
+          Serial.println(str) ;
           break ;
         case 1:
           cxe = x ; cye = y ; stat = 2 ;
           sprintf(str,"CXE=%4d  CYE=%4d",cxe,cye) ;
-          dispStr(str,50,70) ;
+          Serial.println(str) ;
           break ;
       }
     }
@@ -246,11 +166,9 @@ void calibration( ) {
   ox = cxs - px * 10 ;
   oy = cys - py * 10 ;
   sprintf(str,"PX=%d  PY=%d",px,py) ;
-  dispStr(str,50,90) ;
+  Serial.println(str) ;
   sprintf(str,"OX=%d OY=%d",ox,oy) ;
-  dispStr(str,50,110) ;
-
-  delay(3000) ;
+  Serial.println(str) ;
 }
 
 void ConvPos(int &x,int &y) {
@@ -260,7 +178,7 @@ void ConvPos(int &x,int &y) {
 
   char str[24] ;
   sprintf(str,"TSC X=%4d Y=%4d",x,y) ;
-  dispStr(str,20,tftHeight - 40) ;
+  Serial.println(str) ;
 
   switch(tftDir) { // Dir = 2 以外は動作確認してない
     case 1: x = wx ; y = tftHeight - wy ; break ;
@@ -270,7 +188,7 @@ void ConvPos(int &x,int &y) {
   }
 
   sprintf(str,"TFT X=%4d Y=%4d",x,y) ;
-  dispStr(str,20,tftHeight - 20) ;
+  Serial.println(str) ;
 }
 
 void DrowButton( ) {
@@ -312,8 +230,11 @@ void PushButton(int x,int y) {
 }
 
 // ▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼
-// SPISettings settings = SPISettings(2000000, MSBFIRST, SPI_MODE0);  // 2MHzで合ってるよね？変だと思ったら修正してください。
+// SPISettings settings = SPISettings(4000000, MSBFIRST, SPI_MODE0);  // 4MHz
 void setup() {
+  Serial.begin(9600);
+  Serial.println(F("TOUCH PANEL(TSC2046) TEST"));
+
   SPI.begin();  //SPIを初期化、SCK、MOSI、SSの各ピンの動作は出力、SCK、MOSIはLOW、SSはHIGH
   SPI.setClockDivider(SPI_CLOCK_DIV4);
   SPI.setBitOrder(MSBFIRST);
@@ -360,9 +281,6 @@ void setup() {
   digitalWrite(TFT_CS, HIGH); // TFT解放
 
   // ----- APRI INIT -----
-  fontColorF[0] = 0xFF ; fontColorF[1] = 0xFF ;   // TEXT FOR GROND COLOR
-  fontColorB[0] = 0x00 ; fontColorB[1] = 0x00 ;   // TEXT BACK GROND COLOR
-
   tftDir = 1 ;
   tftWidth = ILI9341_WIDTH ;
   tftHeight = ILI9341_HEIGHT ;
@@ -376,8 +294,8 @@ void setup() {
 
 // ▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼▲▼
 void loop() {
-  int x,y,z ;
-  if ( readPos(x,y,z) ) {
+  int x,y ;
+  if ( readPos(x,y) ) {
     ConvPos(x,y) ;
     PushButton(x,y) ;
   }
